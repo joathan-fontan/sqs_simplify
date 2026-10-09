@@ -107,9 +107,11 @@ module SqsSimplify
         consumer = new(sqs_message, time_left)
         call_hook(:before_each, consumer)
 
-        Timeout.timeout(time_left) do
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        Timeout.timeout(time_left, Errors::ExecutionExpired) do
           around.is_a?(Proc) ? around.call(consumer) : consumer.perform
         end
+        raise Errors::ExecutionExpired if Process.clock_gettime(Process::CLOCK_MONOTONIC) - started >= time_left
       rescue Exception => e
         if consumer
           consumer.delete_sqs_message = false

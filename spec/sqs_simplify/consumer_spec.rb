@@ -28,6 +28,56 @@ RSpec.describe SqsSimplify::Consumer do
     end
   end
 
+  context 'when the message runs out of time' do
+    let(:sqs_message) { OpenStruct.new(body: { text: 'slow' }.to_json, receipt_handle: 'handle') }
+
+    before do
+      allow(ConsumerExample).to receive(:visibility_timeout).and_return(0.2)
+      allow(ConsumerExample).to receive(:delete_sqs_message)
+    end
+
+    after { JobExample.errors.clear }
+
+    def consume
+      ConsumerExample.send(:consume_sqs_message, sqs_message, Time.now)
+    end
+
+    it 'must interrupt the perform with an exception so an open transaction rolls back' do
+      seen = nil
+      allow_any_instance_of(ConsumerExample).to receive(:perform) do
+        sleep 1
+      rescue Exception => e
+        seen = e
+        raise
+      end
+
+      consume
+
+      expect(seen).to be_a(SqsSimplify::Errors::ExecutionExpired)
+      expect(ConsumerExample).not_to have_received(:delete_sqs_message)
+    end
+
+    it 'must keep the message when the perform swallows the timeout' do
+      allow_any_instance_of(ConsumerExample).to receive(:perform) do
+        sleep 1
+      rescue Exception
+        nil
+      end
+
+      consume
+
+      expect(ConsumerExample).not_to have_received(:delete_sqs_message)
+    end
+
+    it 'must delete the message when the perform finishes in time' do
+      allow_any_instance_of(ConsumerExample).to receive(:perform)
+
+      consume
+
+      expect(ConsumerExample).to have_received(:delete_sqs_message).with(sqs_message)
+    end
+  end
+
   context 'class methods' do
     context '.amount_processes' do
       it do

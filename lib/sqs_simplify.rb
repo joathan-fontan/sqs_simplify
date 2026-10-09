@@ -5,6 +5,7 @@ require 'fileutils'
 require 'json'
 require 'ostruct'
 require 'parallel'
+require 'timeout'
 
 require 'sqs_simplify/execution_hook'
 require 'sqs_simplify/client'
@@ -22,6 +23,7 @@ require 'sqs_simplify/worker'
 require 'sqs_simplify/job'
 require 'sqs_simplify/dead_queue'
 
+require 'sqs_simplify/errors/execution_expired'
 require 'sqs_simplify/errors/non_existent_queue'
 require 'sqs_simplify/errors/reserved_method_name'
 
